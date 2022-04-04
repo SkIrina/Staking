@@ -44,20 +44,25 @@ contract Staking {
             + rewards[account];
     }
 
-    modifier updateReward(address account) {
+    function _updateReward(address account) private {
         lastUpdateTime = block.timestamp;
         rewards[account] = earned(account);
-        _;
     }
 
-    function stake(uint _amount) external updateReward(msg.sender) {
+    function stake(uint _amount) external returns (bool) {
+        require(_amount > 0, "No zero stakes");
+        _updateReward(msg.sender);
         _totalSupply += _amount;
         _balances[msg.sender] += _amount;
         stakeStart[msg.sender] = block.timestamp;
         stakingToken.transferFrom(msg.sender, address(this), _amount);
+        emit Staked(msg.sender, _amount, block.timestamp);
+        return true;
     }
 
-    function unstake() external updateReward(msg.sender) {
+    function unstake() external returns (bool) {
+        require(_balances[msg.sender] > 0, "Nothing to withdraw");
+        _updateReward(msg.sender);
         uint amount = _balances[msg.sender];
         _totalSupply -= amount;
         _balances[msg.sender] = 0;
@@ -66,13 +71,23 @@ contract Staking {
             amount = amount - (amount / 5);
         }
         stakingToken.transfer(msg.sender, amount);
+        emit Unstaked(msg.sender, amount, block.timestamp);
+        return true;
     }
 
-    function claim() external updateReward(msg.sender) {
+    function claim() external returns (bool) {
+        _updateReward(msg.sender);
+        require(rewards[msg.sender] > 0, "Nothing to claim");
         uint reward = rewards[msg.sender];
         rewards[msg.sender] = 0;
         rewardsToken.transfer(msg.sender, reward);
+        emit Claimed(msg.sender, reward, block.timestamp);
+        return true;
     }
+
+    event Staked(address _account, uint256 _amount, uint256 timestamp);
+    event Unstaked(address _account, uint256 _amount, uint256 timestamp);
+    event Claimed(address _account, uint256 _amount, uint256 timestamp);
 }
 
 interface IERC20 {
